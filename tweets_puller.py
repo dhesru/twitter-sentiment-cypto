@@ -4,6 +4,10 @@ import pandas as pd
 import json
 from datetime import datetime
 from dateutil import tz
+import matplotlib
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 
 # access_token= '313172786-mGNKBZ3a2yqx5MEIzpp8e0kGRkmkgqT7FC7uBRNV'
 # access_token_secret= 'P9ZRGItNdQmesvwY70hCf3NcSrbemZ4wkeuXk6G1DZLvm'
@@ -29,7 +33,7 @@ auth.set_access_token(access_token, access_token_secret)
 api = tweepy.API(auth)
 
 # Get the User object for twitter...
-tweets = api.user_timeline(screen_name='danielesesta',count=100)
+tweets = api.user_timeline(screen_name='danielesesta',count=5000,include_rts=False)
 to_zone = tz.gettz('Asia/Singapore')
 
 tweets_df = pd.DataFrame()
@@ -45,8 +49,10 @@ for tweet in tweets:
     tweet_ori = tweet._json.get('text')
     tweet_created = tweet._json.get('created_at')
     tweet_created = datetime.strptime(tweet_created,'%a %b %m %H:%M:%S %z %Y').astimezone(to_zone)
-    tweets_dict['tweet'].append(tweet_ori)
-    tweets_dict['created_at'].append(tweet_created)
+    for k_c_w in key_crypto_words:
+        if k_c_w in tweet_ori:
+            tweets_dict['tweet'].append(tweet_ori)
+            tweets_dict['created_at'].append(tweet_created)
 
 
 tweets_data = pd.DataFrame.from_dict(tweets_dict)
@@ -55,8 +61,38 @@ sentences = tweets_data['tweet']
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 analyzer = SentimentIntensityAnalyzer()
-for sentence in sentences:
-    vs = analyzer.polarity_scores(sentence)
-    print("{:-<65} {}".format(sentence, str(vs)))
 
+analyze_dict = dict()
+analyze_dict['neg'] = list()
+analyze_dict['neu'] = list()
+analyze_dict['pos'] = list()
+analyze_dict['compound'] = list()
+analyze_dict['created_at'] = list()
 
+count = 0
+for twt in tweets_dict.get('tweet'):
+    created_at = tweets_dict.get('created_at')[count]
+    vs = analyzer.polarity_scores(twt)
+    analyze_dict['neg'].append(vs.get('neg'))
+    analyze_dict['neu'].append(vs.get('neu'))
+    analyze_dict['pos'].append(vs.get('pos'))
+    analyze_dict['compound'].append(vs.get('compound'))
+    analyze_dict['created_at'].append(created_at)
+    count += 1
+
+analyze_df = pd.DataFrame.from_dict(analyze_dict)
+analyze_df = analyze_df.set_index('created_at')
+
+print(analyze_df)
+
+sns.set(rc={'figure.figsize':(11, 4)})
+
+cols_plot = ['neg','neu','pos','compound']
+axes = analyze_df[cols_plot].plot(marker='.', alpha=0.5, linestyle='None', figsize=(11, 9), subplots=True)
+cnt = 0
+for ax in axes:
+    y_label = 'Plot for ' + str(cols_plot[cnt])
+    ax.set_ylabel(y_label)
+    ax.set_ylim(-1.2,1.2)
+    cnt += 1
+plt.show()
